@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="DemoApi.Benchmarks/DemoApi.Benchmarks.csproj" />
+  <Project Path="DemoApi/DemoApi.csproj" />
+</Solution>

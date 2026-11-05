@@ -1,0 +1,28 @@
+filebeat.inputs:
+  - type: filestream
+    id: demo-zlogger
+    paths:
+      - /data/*/*/zlogger.log
+    prospector.scanner.check_interval: 200ms
+    backoff.init: 50ms
+    backoff.max: 200ms
+    parsers:
+      - ndjson:
+          target: ""
+
+queue.mem:
+  events: 32768
+  flush.min_events: 1024
+  flush.timeout: 10ms
+
+output.kafka:
+  hosts: ["localhost:19092", "localhost:19093", "localhost:19094"]
+  version: "2.6.0"
+  topic: "%{[topic]}"
+  key: "%{[id]}"
+  required_acks: -1
+  compression: none
+  codec.format:
+    string: '{"id":"%{[id]}","name":"%{[name]}","email":"%{[email]}"}'
+
+logging.level: warning

@@ -1,0 +1,96 @@
+name: outmessage-demo
+
+x-kafka: &kafka
+  image: apache/kafka:4.1.0
+  healthcheck:
+    test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+    interval: 5s
+    timeout: 10s
+    retries: 30
+
+x-kafka-env: &kafka-env
+  KAFKA_PROCESS_ROLES: broker,controller
+  KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+  KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+  KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+  KAFKA_LISTENERS: INTERNAL://:29092,EXTERNAL://:9092,CONTROLLER://:9093
+  KAFKA_CONTROLLER_QUORUM_VOTERS: 1@demo-kafka-1:9093,2@demo-kafka-2:9093,3@demo-kafka-3:9093
+  KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+  KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+  KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+  KAFKA_MIN_INSYNC_REPLICAS: 2
+  KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+  KAFKA_HEAP_OPTS: -Xms512m -Xmx512m
+  CLUSTER_ID: 5L6g3nShT-eMCtK--X86sw
+
+services:
+  demo-kafka-1:
+    <<: *kafka
+    ports: ["19092:9092"]
+    environment:
+      <<: *kafka-env
+      KAFKA_NODE_ID: 1
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://demo-kafka-1:29092,EXTERNAL://localhost:19092
+
+  demo-kafka-2:
+    <<: *kafka
+    ports: ["19093:9092"]
+    environment:
+      <<: *kafka-env
+      KAFKA_NODE_ID: 2
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://demo-kafka-2:29092,EXTERNAL://localhost:19093
+
+  demo-kafka-3:
+    <<: *kafka
+    ports: ["19094:9092"]
+    environment:
+      <<: *kafka-env
+      KAFKA_NODE_ID: 3
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://demo-kafka-3:29092,EXTERNAL://localhost:19094
+
+  demo-postgres:
+    image: postgres:17
+    command: ["postgres", "-c", "max_connections=200"]
+    ports: ["15432:5432"]
+    environment:
+      POSTGRES_USER: demo
+      POSTGRES_PASSWORD: demo
+      POSTGRES_DB: demo
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U demo"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  demo-azurite:
+    # Installed from npm because the mcr.microsoft.com image kept resetting during download
+    image: node:22.12.0-alpine
+    command: ["npx", "-y", "-p", "azurite@3.33.0", "azurite-blob", "--blobHost", "0.0.0.0", "--skipApiVersionCheck", "--location", "/tmp/azurite"]
+    ports: ["10000:10000"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('net').connect(10000,'127.0.0.1').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))"]
+      interval: 3s
+      timeout: 3s
+      retries: 60
+
+  demo-gateway:
+    image: nginx:1.27.5-alpine
+    network_mode: host
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+
+  demo-filebeat:
+    image: docker.elastic.co/beats/filebeat:8.17.0
+    network_mode: host
+    user: root
+    command: ["filebeat", "-e", "--strict.perms=false"]
+    volumes:
+      - ./filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - ${DEMO_DATA_DIR:-${HOME}/.cache/outmessage-demo}:/data:ro
+    depends_on:
+      demo-kafka-1:
+        condition: service_healthy
+      demo-kafka-2:
+        condition: service_healthy
+      demo-kafka-3:
+        condition: service_healthy
