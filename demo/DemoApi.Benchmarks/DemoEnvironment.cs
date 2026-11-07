@@ -61,11 +61,11 @@ public sealed record BenchmarkResult(
     double ApiPeakMemoryMb,
     double GeneratorCpuPercentOfMachine)
 {
-    private const string Header = "utc,solution,rate,concurrency,sent,accepted,errors,missing,duplicates,last_response_ms,delivered_ms,p50_ms,p95_ms,p99_ms,api_cpu_pct_core,api_peak_mb,generator_cpu_pct_machine";
+    private const string Header = "utc,solution,rate,concurrency,message_bytes,sent,accepted,errors,missing,duplicates,last_response_ms,delivered_ms,p50_ms,p95_ms,p99_ms,api_cpu_pct_core,api_peak_mb,generator_cpu_pct_machine";
 
     public static void Append(BenchmarkResult result)
     {
-        var path = Path.Combine(DemoEnvironment.DemoRoot, "results", "benchmark.csv");
+        var path = Path.Combine(DemoEnvironment.DemoRoot, "results", "benchmark-1kb.csv");
 
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
 
@@ -82,6 +82,7 @@ public sealed record BenchmarkResult(
         Solution,
         Rate,
         Concurrency,
+        LoadGenerator.MessageBytes,
         Sent,
         Accepted,
         Errors,

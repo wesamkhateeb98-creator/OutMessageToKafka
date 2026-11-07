@@ -12,8 +12,45 @@ builder.Services.AddSingleton(options);
 
 builder.Services.AddSingleton<KafkaSender>();
 
-builder.Services.AddSolution(builder.Configuration.GetValue<string>("Demo:Solution")
-    ?? throw new InvalidOperationException("Demo:Solution is required."));
+var solution = builder.Configuration["solution"]
+    ?? throw new InvalidOperationException("--solution=<s1|s2|s3|s4|s5|s6> is required.");
+
+// Each process runs exactly one solution, so background workers never disturb another benchmark
+switch (solution)
+{
+    case "s1":
+        builder.Services.AddSingleton<IMessageAcceptor, AwaitProduceAcceptor>();
+
+        break;
+
+    case "s2":
+        AddAcceptorWithRelay<BlobBuffer>(builder.Services);
+
+        break;
+
+    case "s3":
+        AddAcceptorWithRelay<GroupCommitWal>(builder.Services);
+
+        break;
+
+    case "s4":
+        AddAcceptorWithRelay<PostgresOutbox>(builder.Services);
+
+        break;
+
+    case "s5":
+        AddAcceptorWithRelay<SqliteOutbox>(builder.Services);
+
+        break;
+
+    case "s6":
+        builder.Services.AddSingleton<IMessageAcceptor, ZLoggerAcceptor>();
+
+        break;
+
+    default:
+        throw new ArgumentException($"Unknown solution: {solution}. Use s1, s2, s3, s4, s5, or s6.");
+}
 
 var app = builder.Build();
 
@@ -40,3 +77,17 @@ app.MapPost("/messages", async (IncomingMessage request, HttpContext http, IMess
 });
 
 app.Run();
+
+static void AddAcceptorWithRelay<TSolution>(IServiceCollection services)
+    where TSolution : class, IMessageAcceptor, IRelaySource, IHostedService
+{
+    services.AddSingleton<TSolution>();
+
+    services.AddSingleton<IMessageAcceptor>(provider => provider.GetRequiredService<TSolution>());
+
+    services.AddSingleton<IRelaySource>(provider => provider.GetRequiredService<TSolution>());
+
+    services.AddHostedService(provider => provider.GetRequiredService<TSolution>());
+
+    services.AddHostedService<RelayWorker>();
+}

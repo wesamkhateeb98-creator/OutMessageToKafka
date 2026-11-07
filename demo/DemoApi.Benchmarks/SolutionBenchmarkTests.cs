@@ -2,11 +2,14 @@ using System.Diagnostics;
 using Xunit;
 using Xunit.Abstractions;
 
+// A second test class running at the same time would share the port and skew the numbers
+[assembly: CollectionBehavior(DisableTestParallelization = true)]
+
 namespace DemoApi.Benchmarks;
 
 /// <summary>
-/// Sends DEMO_COUNT requests (default 10,000) of {name, email} to one solution, then checks that every accepted
-/// message reached Kafka. DEMO_RATE is an arrival rate per second (default 5,000); 0 sends as fast as
+/// Sends DEMO_COUNT requests (default 10,000) of 1KB to every solution, at every load, for every round, then checks
+/// that every accepted message reached Kafka. Rate 5,000 is an arrival rate per second; rate 0 sends as fast as
 /// DEMO_CONCURRENCY open requests allow (default 256).
 /// </summary>
 public sealed class SolutionBenchmarkTests(ITestOutputHelper output)
@@ -17,24 +20,33 @@ public sealed class SolutionBenchmarkTests(ITestOutputHelper output)
 
     private static readonly TimeSpan DeliveryTimeout = TimeSpan.FromMinutes(3);
 
+    public static TheoryData<string, int, int> AllCases()
+    {
+        var cases = new TheoryData<string, int, int>();
+
+        foreach (var solution in new[] { "s1", "s2", "s3", "s4", "s5", "s6" })
+        {
+            foreach (var rate in new[] { 5_000, 0 })
+            {
+                foreach (var round in new[] { 1, 2, 3 })
+                {
+                    cases.Add(solution, rate, round);
+                }
+            }
+        }
+
+        return cases;
+    }
+
     [Theory]
-    [InlineData("await-produce")]
-    [InlineData("outbox")]
-    [InlineData("local-wal")]
-    [InlineData("blob")]
-    [InlineData("immediate-fsync")]
-    [InlineData("gateway-wal")]
-    [InlineData("zlogger")]
-    [InlineData("sqlite")]
-    public async Task EveryAcceptedMessageReachesKafka(string solution)
+    [MemberData(nameof(AllCases))]
+    public async Task EveryAcceptedMessageReachesKafka(string solution, int rate, int round)
     {
         var count = EnvironmentInt("DEMO_COUNT", 10_000);
 
-        var rate = EnvironmentInt("DEMO_RATE", 5_000);
-
         var concurrency = EnvironmentInt("DEMO_CONCURRENCY", 256);
 
-        var topic = $"demo-{solution}-{DateTime.UtcNow:yyyyMMddHHmmss}";
+        var topic = $"demo-{solution}-r{rate}-{round}-{DateTime.UtcNow:yyyyMMddHHmmss}";
 
         await DemoEnvironment.CreateTopicAsync(topic);
 

@@ -115,6 +115,19 @@ messages/instance-1/
 | تلف قرص الـ instance | 0 | الملفات في Blob، وليست على القرص |
 | ❌ `202` بعد `Write` وقبل الـ Commit | حتى 29 | `202` لرسائل ضاعت من الـ buffer |
 
+| | Local Disk (`local-wal`) | Blob |
+|---|---|---|
+| p50 / p95 (مقاس) | 51 / 152ms | 158 / 210ms |
+| الإنتاجية (مقاس) | ≈4,110/s | ≈1,594/s |
+| تكلفة العمليات | ما في رسوم لكل عملية | حتى 43.2 مليون عملية/يوم |
+| Crash للتطبيق | 0 مفقود | 0 مفقود |
+| انقطاع الكهرباء بعد `fsync` | 0 مفقود | 0 مفقود |
+| تلف القرص المحلي | ❌ يفقد غير المرسل | 0 مفقود |
+| توقف السيرفر نهائيًا | الملفات عالقة | Relay ثاني بيكمل |
+| تعطل التخزين نفسه | `503` أو توقف | `503` |
+
+*القياس: وسيط 3 جولات بدون تحديد معدل، 10,000 طلب، بلا أعطال، على لابتوب. الـ Blob المقاس هو Append Blob على Azurite، وليس تصميم Block Blob أعلاه، فالأرقام لا تمثل Azure. رقم العمليات محسوب عند 5,000 رسالة/ثانية وحد 30 رسالة.*
+
 ## تطبيقات مشابهة
 
 - **WarpStream (الولايات المتحدة):** لا يؤكد عملية Produce إلا بعد حفظ الدفعة في object storage. يعلن زمناً قدره p50 250ms وp99 500ms عند batch افتراضي 250ms على S3 Standard. [مسار الكتابة](https://docs.warpstream.com/warpstream/overview/architecture/write-path)، [الزمن](https://docs.warpstream.com/warpstream/kafka/advanced-agent-deployment-options/low-latency-clusters)

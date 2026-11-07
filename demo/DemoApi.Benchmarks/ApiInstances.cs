@@ -2,10 +2,10 @@ using System.Diagnostics;
 
 namespace DemoApi.Benchmarks;
 
-/// <summary>Runs the Release build of DemoApi in its own process, as two instances behind Nginx for gateway-wal.</summary>
+/// <summary>Runs the Release build of DemoApi in its own process.</summary>
 public sealed class ApiInstances : IAsyncDisposable
 {
-    private const string GatewayUrl = "http://127.0.0.1:18088/messages";
+    private const int ApiPort = 15101;
 
     private readonly List<Process> _processes;
 
@@ -24,6 +24,8 @@ public sealed class ApiInstances : IAsyncDisposable
 
     public string Url { get; }
 
+    public string RunDirectory => _runDirectory;
+
     public static async Task<ApiInstances> StartAsync(string solution, string topic)
     {
         var dll = Path.Combine(DemoEnvironment.DemoRoot, "DemoApi", "bin", "Release", "net10.0", "DemoApi.dll");
@@ -35,18 +37,11 @@ public sealed class ApiInstances : IAsyncDisposable
 
         var runDirectory = Path.Combine(DemoEnvironment.DataRoot, topic);
 
-        var ports = solution == "gateway-wal" ? new[] { 15101, 15102 } : [15101];
+        var process = Start(dll, solution, topic, Path.Combine(runDirectory, "api-1"), ApiPort);
 
-        var processes = ports.Select((port, index) => Start(dll, solution, topic, Path.Combine(runDirectory, $"api-{index + 1}"), port)).ToList();
+        await WaitUntilHealthyAsync(ApiPort);
 
-        foreach (var port in ports)
-        {
-            await WaitUntilHealthyAsync(port);
-        }
-
-        var url = solution == "gateway-wal" ? GatewayUrl : $"http://127.0.0.1:{ports[0]}/messages";
-
-        return new ApiInstances(processes, runDirectory, url);
+        return new ApiInstances([process], runDirectory, $"http://127.0.0.1:{ApiPort}/messages");
     }
 
     private static Process Start(string dll, string solution, string topic, string dataDirectory, int port)
@@ -61,7 +56,7 @@ public sealed class ApiInstances : IAsyncDisposable
 
         info.ArgumentList.Add($"--urls=http://127.0.0.1:{port}");
 
-        info.ArgumentList.Add($"--Demo:Solution={solution}");
+        info.ArgumentList.Add($"--solution={solution}");
 
         info.ArgumentList.Add($"--Demo:Topic={topic}");
 
@@ -96,6 +91,16 @@ public sealed class ApiInstances : IAsyncDisposable
         throw new TimeoutException($"DemoApi on port {port} did not become healthy.");
     }
 
+    public void Kill()
+    {
+        foreach (var process in _processes)
+        {
+            process.Kill(entireProcessTree: true);
+
+            process.WaitForExit();
+        }
+    }
+
     public TimeSpan CpuTime()
     {
         return _processes.Aggregate(TimeSpan.Zero, (total, process) =>
@@ -122,9 +127,12 @@ public sealed class ApiInstances : IAsyncDisposable
     {
         foreach (var process in _processes)
         {
-            process.Kill(entireProcessTree: true);
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
 
-            await process.WaitForExitAsync();
+                await process.WaitForExitAsync();
+            }
 
             process.Dispose();
         }

@@ -2,7 +2,7 @@ filebeat.inputs:
   - type: filestream
     id: demo-zlogger
     paths:
-      - /data/*/*/zlogger.log
+      - /data/*/*/zlogger-*.log
     prospector.scanner.check_interval: 200ms
     backoff.init: 50ms
     backoff.max: 200ms

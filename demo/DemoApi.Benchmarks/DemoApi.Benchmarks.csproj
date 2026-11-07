@@ -6,7 +6,7 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../DemoApi/DemoApi.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../DemoApi/DemoApi.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Confluent.Kafka" Version="2.16.0" />

@@ -19,6 +19,22 @@ public sealed record LoadResult(IReadOnlyCollection<string> AcceptedIds, int Err
 
 public static class LoadGenerator
 {
+    public const int MessageBytes = 1024;
+
+    // ASCII only, so every character is one byte and each body is exactly MessageBytes
+    public static string BuildBody(int index)
+    {
+        var email = $"user-{index}@example.com";
+
+        var name = $"user-{index}-";
+
+        var empty = $$"""{"name":"{{name}}","email":"{{email}}"}""";
+
+        var padding = new string('x', MessageBytes - empty.Length);
+
+        return $$"""{"name":"{{name}}{{padding}}","email":"{{email}}"}""";
+    }
+
     public static HttpClient CreateClient()
     {
         var handler = new SocketsHttpHandler
@@ -43,7 +59,7 @@ public static class LoadGenerator
         // A latency starts at the scheduled time, so a slow server cannot hide its own queue
         async Task SendAsync(int index, long scheduledAt)
         {
-            var body = $$"""{"name":"user-{{index}}","email":"user-{{index}}@example.com"}""";
+            var body = BuildBody(index);
 
             try
             {

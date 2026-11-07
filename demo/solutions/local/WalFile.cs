@@ -113,7 +113,7 @@ public sealed class WalReader : IDisposable
     }
 }
 
-/// <summary>docs/local-wal-group-commit.md and docs/gateway-replicated-wal.md: reply after a shared fsync.</summary>
+/// <summary>docs/local-wal-group-commit.md: reply after a shared fsync.</summary>
 public sealed class GroupCommitWal : BackgroundService, IMessageAcceptor, IRelaySource
 {
     private readonly FileStream _log;
@@ -157,82 +157,6 @@ public sealed class GroupCommitWal : BackgroundService, IMessageAcceptor, IRelay
     public Task<IReadOnlyList<DemoMessage>> ReadBatchAsync(CancellationToken ct)
     {
         return Task.FromResult(_reader.ReadBatch(Volatile.Read(ref _durableLength)));
-    }
-
-    public Task AcknowledgeAsync(CancellationToken ct)
-    {
-        _reader.Acknowledge();
-
-        return Task.CompletedTask;
-    }
-
-    public override void Dispose()
-    {
-        _log.Dispose();
-
-        _reader.Dispose();
-
-        base.Dispose();
-    }
-}
-
-/// <summary>docs/immediate-reply-periodic-fsync.md: replies right after write(), fsync runs every 10ms. Can lose accepted messages on power loss.</summary>
-public sealed class ImmediateWal : BackgroundService, IMessageAcceptor, IRelaySource
-{
-    private readonly SafeFileHandle _log;
-
-    private readonly WalReader _reader;
-
-    private readonly Lock _writeLock = new();
-
-    private long _length;
-
-    public ImmediateWal(DemoOptions options)
-    {
-        var path = Path.Combine(options.DataDirectory, "wal.log");
-
-        _log = File.OpenHandle(path, FileMode.Create, FileAccess.Write, FileShare.Read | FileShare.Delete);
-
-        _reader = new WalReader(path, Path.Combine(options.DataDirectory, "checkpoint.bin"));
-    }
-
-    public Task AcceptAsync(DemoMessage message, CancellationToken ct)
-    {
-        var record = WalRecord.Encode(message);
-
-        lock (_writeLock)
-        {
-            RandomAccess.Write(_log, record, _length);
-
-            Volatile.Write(ref _length, _length + record.Length);
-        }
-
-        return Task.CompletedTask;
-    }
-
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        await Task.Yield();
-
-        using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(10));
-
-        try
-        {
-            while (await timer.WaitForNextTickAsync(stoppingToken))
-            {
-                RandomAccess.FlushToDisk(_log);
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            RandomAccess.FlushToDisk(_log);
-        }
-    }
-
-    // The relay does not wait for fsync: what reached Kafka survives a power loss
-    public Task<IReadOnlyList<DemoMessage>> ReadBatchAsync(CancellationToken ct)
-    {
-        return Task.FromResult(_reader.ReadBatch(Volatile.Read(ref _length)));
     }
 
     public Task AcknowledgeAsync(CancellationToken ct)
