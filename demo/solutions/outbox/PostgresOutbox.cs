@@ -2,10 +2,13 @@ using Npgsql;
 
 namespace DemoApi;
 
+/// <summary>The Postgres section of appsettings.s4.json.</summary>
+public sealed record PostgresSettings(string Connection);
+
 /// <summary>docs/outbox-pattern.md: the business row and the outbox row commit in one transaction.</summary>
-public sealed class PostgresOutbox(DemoOptions options) : BackgroundService, IMessageAcceptor, IRelaySource
+public sealed class PostgresOutbox(PostgresSettings settings) : BackgroundService, IMessageAcceptor, IRelaySource
 {
-    private readonly NpgsqlDataSource _dataSource = NpgsqlDataSource.Create(options.PostgresConnection);
+    private readonly NpgsqlDataSource _dataSource = NpgsqlDataSource.Create(settings.Connection);
 
     private readonly List<long> _pending = [];
 

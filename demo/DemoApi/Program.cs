@@ -4,6 +4,14 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Logging.ClearProviders();
 
+var solution = builder.Configuration["solution"]
+    ?? throw new InvalidOperationException("--solution=<s1|s2|s3|s4|s5|s6> is required.");
+
+// Only s2, s4, and s6 have their own file. The command line is added again so it still wins over the files
+builder.Configuration.AddJsonFile($"appsettings.{solution}.json", optional: true);
+
+builder.Configuration.AddCommandLine(args);
+
 var options = DemoOptions.From(builder.Configuration);
 
 Directory.CreateDirectory(options.DataDirectory);
@@ -11,9 +19,6 @@ Directory.CreateDirectory(options.DataDirectory);
 builder.Services.AddSingleton(options);
 
 builder.Services.AddSingleton<KafkaSender>();
-
-var solution = builder.Configuration["solution"]
-    ?? throw new InvalidOperationException("--solution=<s1|s2|s3|s4|s5|s6> is required.");
 
 // Each process runs exactly one solution, so background workers never disturb another benchmark
 switch (solution)
@@ -24,6 +29,8 @@ switch (solution)
         break;
 
     case "s2":
+        builder.Services.AddSingleton(builder.Configuration.GetRequiredSettings<BlobSettings>("Blob"));
+
         AddAcceptorWithRelay<BlobBuffer>(builder.Services);
 
         break;
@@ -34,6 +41,8 @@ switch (solution)
         break;
 
     case "s4":
+        builder.Services.AddSingleton(builder.Configuration.GetRequiredSettings<PostgresSettings>("Postgres"));
+
         AddAcceptorWithRelay<PostgresOutbox>(builder.Services);
 
         break;
@@ -44,6 +53,8 @@ switch (solution)
         break;
 
     case "s6":
+        builder.Services.AddSingleton(builder.Configuration.GetRequiredSettings<DurableLogSettings>("ZLogger"));
+
         builder.Services.AddSingleton<IMessageAcceptor, ZLoggerAcceptor>();
 
         break;

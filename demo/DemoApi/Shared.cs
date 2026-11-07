@@ -19,14 +19,24 @@ public interface IMessageAcceptor
     Task AcceptAsync(DemoMessage message, CancellationToken ct);
 }
 
-public sealed record DemoOptions(string Topic, string DataDirectory, string KafkaServers, string PostgresConnection, string BlobConnection)
+/// <summary>Settings every solution uses. KafkaServers comes from appsettings.json; Topic and DataDirectory change per run.</summary>
+public sealed record DemoOptions(string Topic, string DataDirectory, string KafkaServers)
 {
     public static DemoOptions From(IConfiguration configuration) => new(
-        configuration["Demo:Topic"] ?? throw new InvalidOperationException("Demo:Topic is required."),
-        configuration["Demo:DataDirectory"] ?? throw new InvalidOperationException("Demo:DataDirectory is required."),
-        configuration["Demo:KafkaServers"] ?? "localhost:19092,localhost:19093,localhost:19094",
-        configuration["Demo:PostgresConnection"] ?? "Host=localhost;Port=15432;Username=demo;Password=demo;Database=demo;Maximum Pool Size=100",
-        configuration["Demo:BlobConnection"] ?? "UseDevelopmentStorage=true");
+        Required(configuration, "Demo:Topic"),
+        Required(configuration, "Demo:DataDirectory"),
+        Required(configuration, "Demo:KafkaServers"));
+
+    private static string Required(IConfiguration configuration, string key) =>
+        configuration[key] ?? throw new InvalidOperationException($"{key} is required.");
+}
+
+public static class SettingsExtensions
+{
+    /// <summary>Binds one section of appsettings.{solution}.json, and fails at startup when it is missing.</summary>
+    public static T GetRequiredSettings<T>(this IConfiguration configuration, string section) =>
+        configuration.GetRequiredSection(section).Get<T>()
+            ?? throw new InvalidOperationException($"Section {section} could not be read.");
 }
 
 /// <summary>The one producer shared by every request and relay: acks=all with idempotence.</summary>

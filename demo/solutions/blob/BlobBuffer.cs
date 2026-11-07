@@ -6,7 +6,10 @@ using Azure.Storage.Blobs.Specialized;
 
 namespace DemoApi;
 
-/// <summary>docs/blob-stream-buffer.md: reply after a shared Append every 100ms. Azurite here, so its latency is not Azure's.</summary>
+/// <summary>The Blob section of appsettings.s2.json.</summary>
+public sealed record BlobSettings(string Connection, int BatchWindowMs);
+
+/// <summary>docs/blob-stream-buffer.md: reply after a shared Append every BatchWindowMs. Azurite here, so its latency is not Azure's.</summary>
 public sealed class BlobBuffer : BackgroundService, IMessageAcceptor, IRelaySource
 {
     private const int MaxReadBytes = 1 << 20;
@@ -23,15 +26,15 @@ public sealed class BlobBuffer : BackgroundService, IMessageAcceptor, IRelaySour
 
     private long _pendingOffset;
 
-    public BlobBuffer(DemoOptions options)
+    public BlobBuffer(DemoOptions options, BlobSettings settings)
     {
-        _container = new BlobContainerClient(options.BlobConnection, "demo");
+        _container = new BlobContainerClient(settings.Connection, "demo");
 
         _log = _container.GetAppendBlobClient($"{options.Topic}/{Path.GetFileName(options.DataDirectory)}.log");
 
         _checkpoint = _container.GetBlobClient($"{options.Topic}/{Path.GetFileName(options.DataDirectory)}.checkpoint");
 
-        _queue = new GroupCommitQueue(CommitAsync, TimeSpan.FromMilliseconds(100));
+        _queue = new GroupCommitQueue(CommitAsync, TimeSpan.FromMilliseconds(settings.BatchWindowMs));
     }
 
     public override async Task StartAsync(CancellationToken cancellationToken)

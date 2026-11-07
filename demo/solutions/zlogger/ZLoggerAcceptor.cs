@@ -3,17 +3,15 @@ using ZLogger;
 
 namespace DemoApi;
 
+/// <summary>The ZLogger section of appsettings.s6.json.</summary>
+public sealed record DurableLogSettings(int MaxPending, long MaxFileBytes, int DurableTimeoutSeconds);
+
 /// <summary>docs/zlogger-file-relay.md: replies only after fsync covered the line, and Filebeat ships the file.</summary>
 public sealed class ZLoggerAcceptor : IMessageAcceptor, IDisposable
 {
-    // At or below ZLogger's capacity, so its PostSlow never blocks a request thread with Wait
-    private const int MaxPending = 10_000;
+    private readonly SemaphoreSlim _pendingSlots;
 
-    private const long MaxFileBytes = 1L << 30;
-
-    private static readonly TimeSpan DurableTimeout = TimeSpan.FromSeconds(5);
-
-    private readonly SemaphoreSlim _pendingSlots = new(MaxPending, MaxPending);
+    private readonly TimeSpan _durableTimeout;
 
     private readonly DurableLogStream _stream;
 
@@ -25,11 +23,15 @@ public sealed class ZLoggerAcceptor : IMessageAcceptor, IDisposable
 
     private long _lastSeq;
 
-    public ZLoggerAcceptor(DemoOptions options)
+    public ZLoggerAcceptor(DemoOptions options, DurableLogSettings settings)
     {
         _topic = options.Topic;
 
-        _stream = new DurableLogStream(options.DataDirectory, MaxFileBytes, DurableLogStream.SyncToDisk);
+        _pendingSlots = new SemaphoreSlim(settings.MaxPending, settings.MaxPending);
+
+        _durableTimeout = TimeSpan.FromSeconds(settings.DurableTimeoutSeconds);
+
+        _stream = new DurableLogStream(options.DataDirectory, settings.MaxFileBytes, DurableLogStream.SyncToDisk);
 
         _factory = LoggerFactory.Create(logging =>
         {
@@ -39,7 +41,8 @@ public sealed class ZLoggerAcceptor : IMessageAcceptor, IDisposable
             {
                 zlogger.FullMode = BackgroundBufferFullMode.Block;
 
-                zlogger.BackgroundBufferCapacity = MaxPending;
+                // Equal to the pending limit, so ZLogger's PostSlow never blocks a request thread with Wait
+                zlogger.BackgroundBufferCapacity = settings.MaxPending;
             });
         });
 
@@ -66,7 +69,7 @@ public sealed class ZLoggerAcceptor : IMessageAcceptor, IDisposable
 
             _logger.ZLogInformation($"{line}");
 
-            await durable.WaitAsync(DurableTimeout, ct);
+            await durable.WaitAsync(_durableTimeout, ct);
         }
         catch
         {
