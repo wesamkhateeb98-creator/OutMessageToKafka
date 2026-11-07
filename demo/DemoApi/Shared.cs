@@ -4,8 +4,6 @@ using Confluent.Kafka;
 
 namespace DemoApi;
 
-public sealed record IncomingMessage(string Name, string Email);
-
 public sealed record DemoMessage(string Id, string Name, string Email)
 {
     public byte[] ToJson() => JsonSerializer.SerializeToUtf8Bytes(this);

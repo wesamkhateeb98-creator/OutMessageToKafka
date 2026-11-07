@@ -1,6 +1,6 @@
 {
   // Start the demo containers first: cd demo && docker compose up -d --wait
-  // Send a request: curl -X POST http://localhost:5106/messages -H 'Content-Type: application/json' -d '{"name":"a","email":"a@b.c"}'
+  // Each config sends Load:Count messages from demo/DemoApi/appsettings.json; add "--count=100000" to args to change it
   "version": "0.2.0",
   "configurations": [
     {
@@ -11,12 +11,11 @@
       "program": "${workspaceFolder}/demo/DemoApi/bin/Debug/net10.0/DemoApi.dll",
       "args": [
         "--solution=s1",
-        "--urls=http://localhost:5101",
         "--Demo:Topic=demo-debug",
         "--Demo:DataDirectory=${env:HOME}/.cache/outmessage-demo/debug/s1"
       ],
       "cwd": "${workspaceFolder}/demo/DemoApi",
-      "env": { "ASPNETCORE_ENVIRONMENT": "Development" },
+      "env": { "DOTNET_ENVIRONMENT": "Development" },
       "console": "integratedTerminal"
     },
     {
@@ -27,12 +26,11 @@
       "program": "${workspaceFolder}/demo/DemoApi/bin/Debug/net10.0/DemoApi.dll",
       "args": [
         "--solution=s2",
-        "--urls=http://localhost:5102",
         "--Demo:Topic=demo-debug",
         "--Demo:DataDirectory=${env:HOME}/.cache/outmessage-demo/debug/s2"
       ],
       "cwd": "${workspaceFolder}/demo/DemoApi",
-      "env": { "ASPNETCORE_ENVIRONMENT": "Development" },
+      "env": { "DOTNET_ENVIRONMENT": "Development" },
       "console": "integratedTerminal"
     },
     {
@@ -43,12 +41,11 @@
       "program": "${workspaceFolder}/demo/DemoApi/bin/Debug/net10.0/DemoApi.dll",
       "args": [
         "--solution=s3",
-        "--urls=http://localhost:5103",
         "--Demo:Topic=demo-debug",
         "--Demo:DataDirectory=${env:HOME}/.cache/outmessage-demo/debug/s3"
       ],
       "cwd": "${workspaceFolder}/demo/DemoApi",
-      "env": { "ASPNETCORE_ENVIRONMENT": "Development" },
+      "env": { "DOTNET_ENVIRONMENT": "Development" },
       "console": "integratedTerminal"
     },
     {
@@ -59,12 +56,11 @@
       "program": "${workspaceFolder}/demo/DemoApi/bin/Debug/net10.0/DemoApi.dll",
       "args": [
         "--solution=s4",
-        "--urls=http://localhost:5104",
         "--Demo:Topic=demo-debug",
         "--Demo:DataDirectory=${env:HOME}/.cache/outmessage-demo/debug/s4"
       ],
       "cwd": "${workspaceFolder}/demo/DemoApi",
-      "env": { "ASPNETCORE_ENVIRONMENT": "Development" },
+      "env": { "DOTNET_ENVIRONMENT": "Development" },
       "console": "integratedTerminal"
     },
     {
@@ -75,12 +71,11 @@
       "program": "${workspaceFolder}/demo/DemoApi/bin/Debug/net10.0/DemoApi.dll",
       "args": [
         "--solution=s5",
-        "--urls=http://localhost:5105",
         "--Demo:Topic=demo-debug",
         "--Demo:DataDirectory=${env:HOME}/.cache/outmessage-demo/debug/s5"
       ],
       "cwd": "${workspaceFolder}/demo/DemoApi",
-      "env": { "ASPNETCORE_ENVIRONMENT": "Development" },
+      "env": { "DOTNET_ENVIRONMENT": "Development" },
       "console": "integratedTerminal"
     },
     {
@@ -91,12 +86,11 @@
       "program": "${workspaceFolder}/demo/DemoApi/bin/Debug/net10.0/DemoApi.dll",
       "args": [
         "--solution=s6",
-        "--urls=http://localhost:5106",
         "--Demo:Topic=demo-debug",
         "--Demo:DataDirectory=${env:HOME}/.cache/outmessage-demo/debug/s6"
       ],
       "cwd": "${workspaceFolder}/demo/DemoApi",
-      "env": { "ASPNETCORE_ENVIRONMENT": "Development" },
+      "env": { "DOTNET_ENVIRONMENT": "Development" },
       "console": "integratedTerminal"
     }
   ]

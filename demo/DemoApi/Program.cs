@@ -1,6 +1,6 @@
 using DemoApi;
 
-var builder = WebApplication.CreateBuilder(args);
+var builder = Host.CreateApplicationBuilder(args);
 
 builder.Logging.ClearProviders();
 
@@ -10,9 +10,11 @@ var solution = builder.Configuration["solution"]
 // Only s2, s4, and s6 have their own file. The command line is added again so it still wins over the files
 builder.Configuration.AddJsonFile($"appsettings.{solution}.json", optional: true);
 
-builder.Configuration.AddCommandLine(args);
+builder.Configuration.AddCommandLine(args, LoadSettings.SwitchMappings);
 
 var options = DemoOptions.From(builder.Configuration);
+
+var load = builder.Configuration.GetRequiredSettings<LoadSettings>("Load");
 
 Directory.CreateDirectory(options.DataDirectory);
 
@@ -63,31 +65,25 @@ switch (solution)
         throw new ArgumentException($"Unknown solution: {solution}. Use s1, s2, s3, s4, s5, or s6.");
 }
 
-var app = builder.Build();
+using var host = builder.Build();
 
-app.MapGet("/health", () => Results.Ok());
+// Starts the relays before the first message, so nothing waits for them
+await host.StartAsync();
 
-app.MapPost("/messages", async (IncomingMessage request, HttpContext http, IMessageAcceptor acceptor, CancellationToken ct) =>
-{
-    var headerId = http.Request.Headers["X-Message-Id"].ToString();
+var acceptor = host.Services.GetRequiredService<IMessageAcceptor>();
 
-    var id = string.IsNullOrEmpty(headerId) ? Guid.CreateVersion7().ToString("N") : headerId;
+var stopping = host.Services.GetRequiredService<IHostApplicationLifetime>().ApplicationStopping;
 
-    try
-    {
-        await acceptor.AcceptAsync(new DemoMessage(id, request.Name, request.Email), ct);
-    }
-    catch (Exception) when (!ct.IsCancellationRequested)
-    {
-        return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
-    }
+var result = await LoadRunner.RunAsync(acceptor, load, options.DataDirectory, stopping);
 
-    http.Response.Headers["X-Message-Id"] = id;
+result.Save(options.DataDirectory);
 
-    return Results.Accepted();
-});
+Console.WriteLine(result.Describe(solution));
 
-app.Run();
+// The relays may still be sending to Kafka, so the process stays up until it is stopped
+Console.WriteLine("Relaying in the background. Press Ctrl+C to stop.");
+
+await host.WaitForShutdownAsync();
 
 static void AddAcceptorWithRelay<TSolution>(IServiceCollection services)
     where TSolution : class, IMessageAcceptor, IRelaySource, IHostedService

@@ -18,7 +18,7 @@ public sealed class TopicConsumer : IDisposable
 
     private readonly string _topic;
 
-    private long _lastNewMessageAt;
+    private long _lastNewMessageAtUtcTicks;
 
     private int _duplicates;
 
@@ -33,7 +33,8 @@ public sealed class TopicConsumer : IDisposable
         _thread.Start();
     }
 
-    public long LastNewMessageAt => Volatile.Read(ref _lastNewMessageAt);
+    // UTC, because the app process measures its own start time and only wall-clock time is shared
+    public DateTime LastNewMessageAtUtc => new(Volatile.Read(ref _lastNewMessageAtUtcTicks), DateTimeKind.Utc);
 
     public int Duplicates => Volatile.Read(ref _duplicates);
 
@@ -61,7 +62,7 @@ public sealed class TopicConsumer : IDisposable
                 {
                     if (_received.Add(record.Message.Key))
                     {
-                        Volatile.Write(ref _lastNewMessageAt, Stopwatch.GetTimestamp());
+                        Volatile.Write(ref _lastNewMessageAtUtcTicks, DateTime.UtcNow.Ticks);
                     }
                     else
                     {

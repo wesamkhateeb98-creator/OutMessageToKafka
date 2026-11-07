@@ -6,35 +6,31 @@ namespace DemoApi.Benchmarks;
 /// <summary>A process kill keeps the page cache, so this covers the memory stage only. It cannot prove fsync survives a power loss.</summary>
 public sealed class ZLoggerCrashTests
 {
+    private const int Count = 15_000;
+
     [Fact]
     public async Task Kill_DuringBurst_EveryAcceptedMessageIsInTheFile()
     {
         // Arrange
         var topic = $"demo-crash-{DateTime.UtcNow:yyyyMMddHHmmssfff}";
 
-        await using var api = await ApiInstances.StartAsync("s6", topic);
+        await using var app = AppProcess.Start("s6", topic, new LoadSettings(Count, Rate: 0, Concurrency: 256, Warmup: 0));
 
-        using var client = LoadGenerator.CreateClient();
-
-        var burst = LoadGenerator.RunAsync(client, api.Url, count: 15_000, rate: 0, concurrency: 256);
-
-        await Task.Delay(TimeSpan.FromSeconds(1));
+        await app.WaitForAcceptedAsync(minimum: 1_000, TimeSpan.FromSeconds(30));
 
         // Act
-        api.Kill();
+        app.Kill();
 
-        var result = await burst;
+        var acceptedIds = app.ReadAcceptedIds();
 
         // Assert
-        var fileText = string.Concat(Directory.GetFiles(api.RunDirectory, "zlogger-*.log", SearchOption.AllDirectories).Select(ReadShared));
+        var fileText = string.Concat(Directory.GetFiles(app.RunDirectory, "zlogger-*.log", SearchOption.AllDirectories).Select(ReadShared));
 
         var idsInFile = Regex.Matches(fileText, "\"id\":\"([^\"]+)\"").Select(match => match.Groups[1].Value).ToHashSet();
 
-        var missing = result.AcceptedIds.Count(id => !idsInFile.Contains(id));
+        var missing = acceptedIds.Count(id => !idsInFile.Contains(id));
 
-        Assert.NotEmpty(result.AcceptedIds);
-
-        Assert.True(result.Errors > 0, "The kill came after the burst finished, so it proved nothing.");
+        Assert.True(acceptedIds.Count < Count, "The kill came after the burst finished, so it proved nothing.");
 
         Assert.Equal(0, missing);
     }

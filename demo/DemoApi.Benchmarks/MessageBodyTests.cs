@@ -10,16 +10,18 @@ public sealed class MessageBodyTests
     [InlineData(0)]
     [InlineData(9_999)]
     [InlineData(int.MaxValue)]
-    public void BuildBody_AnyIndex_IsExactlyOneKilobyteOfValidJson(int index)
+    public void BuildMessage_AnyIndex_NameAndEmailAreExactlyOneKilobyteOfJson(int index)
     {
         // Act
-        var body = LoadGenerator.BuildBody(index);
+        var message = LoadRunner.BuildMessage(index);
 
         // Assert
+        var body = JsonSerializer.Serialize(new { name = message.Name, email = message.Email });
+
         Assert.Equal(1024, Encoding.UTF8.GetByteCount(body));
 
-        using var json = JsonDocument.Parse(body);
+        Assert.Equal($"user-{index}@example.com", message.Email);
 
-        Assert.Equal($"user-{index}@example.com", json.RootElement.GetProperty("email").GetString());
+        Assert.Equal(32, message.Id.Length);
     }
 }

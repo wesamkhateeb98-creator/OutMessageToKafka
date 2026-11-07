@@ -57,11 +57,10 @@ public sealed record BenchmarkResult(
     double P50Ms,
     double P95Ms,
     double P99Ms,
-    double ApiCpuPercentOfOneCore,
-    double ApiPeakMemoryMb,
-    double GeneratorCpuPercentOfMachine)
+    double AppCpuPercentOfOneCore,
+    double AppPeakMemoryMb)
 {
-    private const string Header = "utc,solution,rate,concurrency,message_bytes,sent,accepted,errors,missing,duplicates,last_response_ms,delivered_ms,p50_ms,p95_ms,p99_ms,api_cpu_pct_core,api_peak_mb,generator_cpu_pct_machine";
+    private const string Header = "utc,solution,rate,concurrency,message_bytes,sent,accepted,errors,missing,duplicates,load_ms,delivered_ms,p50_ms,p95_ms,p99_ms,app_cpu_pct_core,app_peak_mb";
 
     public static void Append(BenchmarkResult result)
     {
@@ -82,7 +81,7 @@ public sealed record BenchmarkResult(
         Solution,
         Rate,
         Concurrency,
-        LoadGenerator.MessageBytes,
+        LoadRunner.MessageBytes,
         Sent,
         Accepted,
         Errors,
@@ -93,9 +92,8 @@ public sealed record BenchmarkResult(
         Format(P50Ms),
         Format(P95Ms),
         Format(P99Ms),
-        Format(ApiCpuPercentOfOneCore),
-        Format(ApiPeakMemoryMb),
-        Format(GeneratorCpuPercentOfMachine));
+        Format(AppCpuPercentOfOneCore),
+        Format(AppPeakMemoryMb));
 
     private static string Format(double value) => value.ToString("F1", CultureInfo.InvariantCulture);
 }

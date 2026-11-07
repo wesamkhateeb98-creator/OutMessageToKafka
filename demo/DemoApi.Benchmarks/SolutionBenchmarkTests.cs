@@ -8,15 +8,15 @@ using Xunit.Abstractions;
 namespace DemoApi.Benchmarks;
 
 /// <summary>
-/// Sends DEMO_COUNT requests (default 10,000) of 1KB to every solution, at every load, for every round, then checks
-/// that every accepted message reached Kafka. Rate 5,000 is an arrival rate per second; rate 0 sends as fast as
-/// DEMO_CONCURRENCY open requests allow (default 256).
+/// Runs every solution at every load for every round: the app sends DEMO_COUNT messages of 1KB (default 10,000) to
+/// itself, then this test checks that every accepted message reached Kafka. Rate 5,000 is an arrival rate per second;
+/// rate 0 sends as fast as DEMO_CONCURRENCY calls at once allow (default 256).
 /// </summary>
 public sealed class SolutionBenchmarkTests(ITestOutputHelper output)
 {
     private const int WarmupCount = 2_000;
 
-    private const int WarmupRate = 500;
+    private static readonly TimeSpan LoadTimeout = TimeSpan.FromMinutes(10);
 
     private static readonly TimeSpan DeliveryTimeout = TimeSpan.FromMinutes(3);
 
@@ -52,43 +52,36 @@ public sealed class SolutionBenchmarkTests(ITestOutputHelper output)
 
         using var consumer = new TopicConsumer(DemoEnvironment.KafkaServers, topic);
 
-        await using var api = await ApiInstances.StartAsync(solution, topic);
+        await using var app = AppProcess.Start(solution, topic, new LoadSettings(count, rate, concurrency, WarmupCount));
 
-        using var client = LoadGenerator.CreateClient();
+        var measured = await app.WaitForResultAsync(LoadTimeout);
 
-        var warmup = await LoadGenerator.RunAsync(client, api.Url, WarmupCount, WarmupRate, concurrency);
+        var acceptedIds = app.ReadAcceptedIds();
 
-        await consumer.WaitForAsync(warmup.AcceptedIds, DeliveryTimeout);
+        var missing = await consumer.WaitForAsync(acceptedIds, DeliveryTimeout);
 
-        var generatorCpuBefore = Process.GetCurrentProcess().TotalProcessorTime;
-
-        var apiCpuBefore = api.CpuTime();
-
-        var measured = await LoadGenerator.RunAsync(client, api.Url, count, rate, concurrency);
-
-        var missing = await consumer.WaitForAsync(measured.AcceptedIds, DeliveryTimeout);
-
-        var delivered = Stopwatch.GetElapsedTime(measured.StartedAt, consumer.LastNewMessageAt);
+        var delivered = consumer.LastNewMessageAtUtc - measured.StartedAtUtc;
 
         await consumer.WaitForTrailingDuplicatesAsync();
+
+        var appCpu = app.CpuTime() - TimeSpan.FromMilliseconds(measured.CpuAtStartMs);
 
         var result = new BenchmarkResult(
             solution,
             rate,
             concurrency,
             count,
-            measured.AcceptedIds.Count,
+            measured.Accepted,
             measured.Errors,
             missing,
             consumer.Duplicates,
-            measured.Elapsed,
+            TimeSpan.FromMilliseconds(measured.ElapsedMs),
             delivered,
-            measured.Percentile(0.50),
-            measured.Percentile(0.95),
-            measured.Percentile(0.99),
-            (api.CpuTime() - apiCpuBefore) / delivered * 100,
-            api.PeakMemoryBytes() / (1024.0 * 1024.0),
-            (Process.GetCurrentProcess().TotalProcessorTime - generatorCpuBefore) / delivered / Environment.ProcessorCount * 100);
+            measured.P50Ms,
+            measured.P95Ms,
+            measured.P99Ms,
+            appCpu / delivered * 100,
+            app.PeakMemoryBytes() / (1024.0 * 1024.0));
 
         // The row is saved first, so a failed assertion still leaves its numbers
         BenchmarkResult.Append(result);
