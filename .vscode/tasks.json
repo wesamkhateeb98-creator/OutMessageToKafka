@@ -1,0 +1,51 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build demo api",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "build",
+        "${workspaceFolder}/demo/DemoApi/DemoApi.csproj",
+        "-c",
+        "Debug",
+        "/property:GenerateFullPaths=true",
+        "/consoleloggerparameters:NoSummary"
+      ],
+      "problemMatcher": "$msCompile",
+      "group": "build"
+    },
+    {
+      // An auto-created topic gets RF=1, so it is created here with RF=3 before the producer can create it.
+      // Port 29092 is the internal listener: inside the container, the external one advertises unreachable localhost:1909x
+      "label": "create debug topic",
+      "type": "process",
+      "command": "docker",
+      "args": [
+        "exec",
+        "outmessage-demo-demo-kafka-1-1",
+        "/opt/kafka/bin/kafka-topics.sh",
+        "--bootstrap-server",
+        "localhost:29092",
+        "--create",
+        "--if-not-exists",
+        "--topic",
+        "demo-debug",
+        "--partitions",
+        "6",
+        "--replication-factor",
+        "3",
+        "--config",
+        "min.insync.replicas=2"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "prepare debug",
+      "dependsOn": ["build demo api", "create debug topic"],
+      "dependsOrder": "sequence",
+      "problemMatcher": []
+    }
+  ]
+}
